@@ -12,10 +12,11 @@ internet ──▶ Cloudflare quick tunnel ──▶ cloudflared ──▶ nginx
 
 ## API
 
-| Method | Path              | Response               |
-| ------ | ----------------- | ---------------------- |
-| GET    | `/echo/{message}` | `{"echo":"<message>"}` |
-| GET    | `/healthz`        | `ok`                   |
+| Method | Path              | Response                |
+| ------ | ----------------- | ----------------------- |
+| GET    | `/`               | usage hint (plain text) |
+| GET    | `/echo/{message}` | `{"echo":"<message>"}`  |
+| GET    | `/healthz`        | `ok`                    |
 
 ```bash
 cargo run                         # listens on :8080 (override with PORT)

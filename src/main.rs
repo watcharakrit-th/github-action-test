@@ -7,6 +7,11 @@ struct Echo {
     echo: String,
 }
 
+/// `GET /` -> usage hint, so opening the bare URL in a browser doesn't 404.
+async fn index() -> &'static str {
+    "echo-api: GET /echo/{message} echoes the message as JSON, e.g. /echo/hello\n"
+}
+
 /// `GET /echo/{message}` -> `{"echo":"<message>"}`
 async fn echo(Path(message): Path<String>) -> Json<Echo> {
     Json(Echo { echo: message })
@@ -19,6 +24,7 @@ async fn healthz() -> &'static str {
 
 fn app() -> Router {
     Router::new()
+        .route("/", get(index))
         .route("/echo/{message}", get(echo))
         .route("/healthz", get(healthz))
 }
@@ -76,6 +82,13 @@ mod tests {
         let status = response.status();
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         (status, String::from_utf8(body.to_vec()).unwrap())
+    }
+
+    #[tokio::test]
+    async fn root_shows_usage() {
+        let (status, body) = send("/").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.contains("/echo/{message}"));
     }
 
     #[tokio::test]
