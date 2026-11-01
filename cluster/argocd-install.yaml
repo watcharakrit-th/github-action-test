@@ -1,0 +1,29 @@
+# Installs Argo CD via k3s' built-in Helm controller. k3s applies this file on
+# startup because docker-compose.yml mounts it into /var/lib/rancher/k3s/server/manifests.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argocd
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-cd
+  version: 10.11.6 # Argo CD v3.5.6
+  targetNamespace: argocd
+  valuesContent: |-
+    dex:
+      enabled: false          # no SSO: log in as the local admin user
+    notifications:
+      enabled: false
+    configs:
+      params:
+        server.insecure: true # plain HTTP UI; fine for a localhost-only lab
+    server:
+      service:
+        type: NodePort
+        nodePortHttp: 30080   # published on localhost:8080 by docker-compose.yml

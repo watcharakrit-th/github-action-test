@@ -1,0 +1,5 @@
+/target
+
+# Local cluster: registry credentials and the kubeconfig k3s writes out.
+/cluster/.env
+/cluster/kubeconfig.yaml

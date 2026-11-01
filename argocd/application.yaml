@@ -1,0 +1,27 @@
+# Argo CD Application: keeps the echo-api namespace in sync with k8s/ on master.
+# The local cluster (cluster/docker-compose.yml) applies this automatically; on any
+# other cluster running Argo CD: kubectl apply -f argocd/application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: echo-api
+  namespace: argocd
+  finalizers:
+    # Deleting the Application also deletes the resources it deployed.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/watcharakrit-th/github-action-test.git
+    targetRevision: master
+    path: k8s
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: echo-api
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # Namespace is created by Argo CD rather than tracked in k8s/, so pruning can never delete it.
+      - CreateNamespace=true

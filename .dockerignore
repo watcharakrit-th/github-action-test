@@ -1,0 +1,5 @@
+# The image only needs Cargo.toml, Cargo.lock and src/.
+*
+!Cargo.toml
+!Cargo.lock
+!src/

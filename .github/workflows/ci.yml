@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    paths-ignore:
+      # Manifest/docs-only changes need no new image; Argo CD picks up k8s/ directly.
+      - "**.md"
+      - "argocd/**"
+      - "cluster/**"
+      - "k8s/**"
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the older run, so the manifest bump
+# below always ends up pointing at the newest image.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  IMAGE: ${{ vars.REGISTRY }}/${{ vars.IMAGE_NAME }}
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+
+  image:
+    name: Build & push image
+    needs: test
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check registry settings
+        if: vars.REGISTRY == '' || vars.IMAGE_NAME == ''
+        run: |
+          echo "::error::Set the REGISTRY and IMAGE_NAME repository variables (Settings > Secrets and variables > Actions > Variables)."
+          exit 1
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ vars.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=raw,value=latest
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Point k8s/ at the new image
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Set image in kustomization.yaml
+        working-directory: k8s
+        run: kustomize edit set image "echo-api=${IMAGE}:${GITHUB_SHA}"
+      - name: Commit and push (Argo CD syncs from here)
+        run: |
+          if git diff --quiet; then
+            echo "k8s/ already points at ${GITHUB_SHA}"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "deploy: echo-api ${GITHUB_SHA::7} [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

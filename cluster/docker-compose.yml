@@ -1,0 +1,66 @@
+# Single-node Kubernetes (k3s) in Docker, with Argo CD installed on startup and
+# the echo-api Application (../argocd/application.yaml) syncing k8s/ from GitHub.
+#
+#   cp .env.example .env    # credentials k3s uses to pull from the private registry
+#   docker compose up -d
+#   export KUBECONFIG=$PWD/kubeconfig.yaml
+#
+#   Argo CD UI: http://localhost:8080   echo-api: http://localhost:8081/echo/hello
+name: echo-api-lab
+
+services:
+  k3s:
+    image: rancher/k3s:v1.36.5-k3s1
+    command:
+      - server
+      - --disable=traefik
+      - --disable=servicelb
+    hostname: k3s # stable node name across container re-creation
+    privileged: true
+    restart: unless-stopped
+    tmpfs:
+      - /run
+      - /var/run
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 65535
+        hard: 65535
+    environment:
+      K3S_KUBECONFIG_OUTPUT: /output/kubeconfig.yaml
+      K3S_KUBECONFIG_MODE: "644"
+    volumes:
+      - k3s-data:/var/lib/rancher/k3s
+      - .:/output
+      # k3s auto-applies every manifest in server/manifests (and re-applies on change).
+      - ./argocd-install.yaml:/var/lib/rancher/k3s/server/manifests/argocd.yaml:ro
+      - ../argocd/application.yaml:/var/lib/rancher/k3s/server/manifests/argocd-application.yaml:ro
+    configs:
+      - source: registries
+        target: /etc/rancher/k3s/registries.yaml
+    ports:
+      - "127.0.0.1:6443:6443" # Kubernetes API
+      - "127.0.0.1:8080:30080" # Argo CD UI (argocd-server NodePort)
+      - "127.0.0.1:8081:30081" # echo-api (k8s/service.yaml NodePort)
+
+configs:
+  # Rendered from .env. Lets k3s' containerd authenticate to the private registry,
+  # so the manifests in k8s/ need no imagePullSecrets.
+  registries:
+    content: |
+      configs:
+        "${REGISTRY_HOST:?set REGISTRY_HOST in cluster/.env}":
+          auth:
+            username: "${REGISTRY_USERNAME:?set REGISTRY_USERNAME in cluster/.env}"
+            password: "${REGISTRY_PASSWORD:?set REGISTRY_PASSWORD in cluster/.env}"
+
+networks:
+  default:
+    ipam:
+      config:
+        # Pinned so this lab never takes Docker's next free pool (172.18.0.0/16),
+        # which kind clusters normally get and setups often hardcode.
+        - subnet: 172.30.0.0/24
+
+volumes:
+  k3s-data:
