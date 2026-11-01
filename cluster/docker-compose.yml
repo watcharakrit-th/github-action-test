@@ -36,6 +36,7 @@ services:
       - .:/output
       # k3s auto-applies every manifest in server/manifests (and re-applies on change).
       - ./argocd-install.yaml:/var/lib/rancher/k3s/server/manifests/argocd.yaml:ro
+      - ./argo-rollouts-install.yaml:/var/lib/rancher/k3s/server/manifests/argo-rollouts.yaml:ro
       - ../argocd/application.yaml:/var/lib/rancher/k3s/server/manifests/argocd-application.yaml:ro
     configs:
       - source: registries

@@ -25,3 +25,11 @@ spec:
     syncOptions:
       # Namespace is created by Argo CD rather than tracked in k8s/, so pruning can never delete it.
       - CreateNamespace=true
+    # On a fresh cluster this can sync before Argo Rollouts has installed the Rollout
+    # CRD; retry instead of giving up on that commit.
+    retry:
+      limit: 10
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

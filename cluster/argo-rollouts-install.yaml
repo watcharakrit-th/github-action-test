@@ -1,0 +1,20 @@
+# Installs the Argo Rollouts controller (blue-green for k8s/echo-api.yaml) via k3s'
+# built-in Helm controller, the same way argocd-install.yaml installs Argo CD.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argo-rollouts
+---
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argo-rollouts
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-rollouts
+  version: 2.43.8 # Argo Rollouts v1.10.1
+  targetNamespace: argo-rollouts
+  valuesContent: |-
+    controller:
+      replicas: 1 # single-node lab

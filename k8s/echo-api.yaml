@@ -1,5 +1,8 @@
-apiVersion: apps/v1
-kind: Deployment
+# Blue-green release via Argo Rollouts: a new image starts as "green" behind
+# echo-api-preview while echo-api (what nginx serves) stays on "blue", until someone
+# promotes it (Argo CD UI: Rollout ⋮ → Resume).
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: echo-api
   labels:
@@ -9,6 +12,12 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: echo-api
+  strategy:
+    blueGreen:
+      activeService: echo-api
+      previewService: echo-api-preview
+      autoPromotionEnabled: false # wait for a human to promote
+      scaleDownDelaySeconds: 30 # keep blue briefly after the switch for instant rollback
   template:
     metadata:
       labels:
@@ -54,7 +63,24 @@ metadata:
   labels:
     app.kubernetes.io/name: echo-api
 spec:
-  # Cluster-internal: all traffic comes in through nginx.
+  # Active: Argo Rollouts pins this to the promoted (blue) pods. Cluster-internal;
+  # all traffic comes in through nginx.
+  selector:
+    app.kubernetes.io/name: echo-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-api-preview
+  labels:
+    app.kubernetes.io/name: echo-api
+spec:
+  # Preview: Argo Rollouts pins this to the new (green) pods while a release waits
+  # for promotion. Reach it with: kubectl -n echo-api port-forward svc/echo-api-preview 8082:80
   selector:
     app.kubernetes.io/name: echo-api
   ports:

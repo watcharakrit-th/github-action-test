@@ -7,6 +7,11 @@ struct Echo {
     echo: String,
 }
 
+#[derive(Serialize)]
+struct Version {
+    version: &'static str,
+}
+
 /// `GET /` -> usage hint, so opening the bare URL in a browser doesn't 404.
 async fn index() -> &'static str {
     "echo-api: GET /echo/{message} echoes the message as JSON, e.g. /echo/hello\n"
@@ -15,6 +20,14 @@ async fn index() -> &'static str {
 /// `GET /echo/{message}` -> `{"echo":"<message>"}`
 async fn echo(Path(message): Path<String>) -> Json<Echo> {
     Json(Echo { echo: message })
+}
+
+/// `GET /version` -> `{"version":"<git sha>"}`, baked in at build time (see Dockerfile),
+/// so blue and green can be told apart during a release.
+async fn version() -> Json<Version> {
+    Json(Version {
+        version: option_env!("GIT_SHA").unwrap_or("dev"),
+    })
 }
 
 /// `GET /healthz` -> `ok` (used by the Kubernetes probes)
@@ -26,6 +39,7 @@ fn app() -> Router {
     Router::new()
         .route("/", get(index))
         .route("/echo/{message}", get(echo))
+        .route("/version", get(version))
         .route("/healthz", get(healthz))
 }
 
@@ -116,6 +130,13 @@ mod tests {
     async fn missing_param_is_not_found() {
         let (status, _) = send("/echo/").await;
         assert_eq!(status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn version_reports_the_build() {
+        let (status, body) = send("/version").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(body.starts_with(r#"{"version":""#));
     }
 
     #[tokio::test]
