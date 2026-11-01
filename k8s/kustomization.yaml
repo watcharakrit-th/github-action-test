@@ -14,4 +14,4 @@ configMapGenerator:
 images:
 - name: echo-api
   newName: docker.io/watcharakritth/mini-rust
-  newTag: fa26345bf1df80755b7c37f50f319805675ad853
+  newTag: a8244d260547266e6bad74772b57ae19b4f11924
