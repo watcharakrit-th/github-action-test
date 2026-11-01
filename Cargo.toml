@@ -11,3 +11,9 @@ tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+
+# Smaller binary for the scratch image: ~2.0 MB -> ~1.1 MB.
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

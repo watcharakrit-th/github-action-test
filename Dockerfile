@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 
-FROM rust:1.99-slim-trixie AS build
+# Alpine's Rust toolchain targets musl, which links fully statically, so the
+# binary needs no libc at runtime and the final image can start from scratch.
+FROM rust:1.99-alpine AS build
 WORKDIR /app
 
 # Compile dependencies against a placeholder main so this layer stays cached
@@ -13,9 +15,10 @@ COPY src ./src
 # touch: make cargo rebuild the real main.rs instead of reusing the placeholder.
 RUN touch src/main.rs && cargo build --release --locked
 
-# glibc runtime matching the trixie (Debian 13) builder; runs as uid 65532.
-FROM gcr.io/distroless/cc-debian13:nonroot
-COPY --from=build /app/target/release/echo-api /usr/local/bin/echo-api
+# Nothing but the binary: no shell, no libc, no package manager.
+FROM scratch
+COPY --from=build /app/target/release/echo-api /echo-api
 ENV PORT=8080
 EXPOSE 8080
-ENTRYPOINT ["/usr/local/bin/echo-api"]
+USER 65532:65532
+ENTRYPOINT ["/echo-api"]
