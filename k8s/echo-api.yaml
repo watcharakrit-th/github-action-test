@@ -46,3 +46,18 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-api
+  labels:
+    app.kubernetes.io/name: echo-api
+spec:
+  # Cluster-internal: all traffic comes in through nginx.
+  selector:
+    app.kubernetes.io/name: echo-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

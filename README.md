@@ -1,8 +1,14 @@
 # echo-api
 
 A tiny Rust ([axum](https://github.com/tokio-rs/axum)) REST API that echoes a path
-parameter, built and pushed to a private registry by GitHub Actions and deployed
-to a local Kubernetes cluster by Argo CD.
+parameter. GitHub Actions tests it and pushes the image to Docker Hub
+(`watcharakritth/mini-rust`); Argo CD deploys it to a local Kubernetes cluster
+behind nginx, and a free Cloudflare Tunnel exposes it publicly.
+
+```
+internet ──▶ Cloudflare quick tunnel ──▶ cloudflared ──▶ nginx ──▶ echo-api
+                       localhost:8081 ──────────────────────▲
+```
 
 ## API
 
@@ -21,19 +27,19 @@ cargo test
 
 Every push runs `cargo fmt --check`, `cargo clippy` and `cargo test`. On `master` it then:
 
-1. builds the Docker image and pushes `<REGISTRY>/<IMAGE_NAME>:<commit-sha>` and `:latest`;
+1. builds the image and pushes `docker.io/watcharakritth/mini-rust:<commit-sha>` and `:latest`;
 2. commits the new tag into `k8s/kustomization.yaml`, which Argo CD syncs to the cluster.
 
-Set these under **Settings → Secrets and variables → Actions**:
+Required: a repository secret **`DOCKERHUB_TOKEN`** (Docker Hub access token with
+Read & Write scope) under **Settings → Secrets and variables → Actions**.
 
-| Kind     | Name                | Example                                        |
-| -------- | ------------------- | ---------------------------------------------- |
-| Variable | `REGISTRY`          | `registry.example.com` (`docker.io` for Docker Hub) |
-| Variable | `IMAGE_NAME`        | `echo-api` (`<dockerhub-user>/echo-api` for Docker Hub) |
-| Secret   | `REGISTRY_USERNAME` | registry user                                  |
-| Secret   | `REGISTRY_PASSWORD` | password or access token with push access      |
+## Kubernetes — `k8s/`
 
-The registry must be reachable from GitHub-hosted runners.
+| File               | What                                                                 |
+| ------------------ | -------------------------------------------------------------------- |
+| `echo-api.yaml`    | the Rust API (2 replicas) and its cluster-internal Service           |
+| `nginx.yaml`, `nginx.conf` | reverse proxy to echo-api; NodePort 30081                    |
+| `cloudflared.yaml` | Cloudflare quick tunnel to nginx (random `*.trycloudflare.com` URL)  |
 
 ## Local cluster — `cluster/`
 
@@ -43,18 +49,17 @@ syncs `k8s/` from this repo's `master` branch into the `echo-api` namespace.
 
 ```bash
 cd cluster
-cp .env.example .env             # registry credentials k3s uses to pull the image
+cp .env.example .env             # Docker Hub token k3s uses to pull images
 docker compose up -d
 export KUBECONFIG=$PWD/kubeconfig.yaml
 kubectl -n argocd get applications
 ```
 
-- Argo CD UI: <http://localhost:8080> (user `admin`, password below)
-- echo-api: <http://localhost:8081/echo/hello>
-
-```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d
-```
+- Argo CD UI: <http://localhost:8080> — user `admin`, password:
+  `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d`
+- echo-api via nginx: <http://localhost:8081/echo/hello>
+- Public URL (changes whenever the cloudflared pod restarts):
+  `kubectl -n echo-api logs deploy/cloudflared | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com'`
 
 Argo CD polls the repo every ~2–3 minutes; press **Refresh** in the UI to sync sooner.
 Tear down with `docker compose down -v`.

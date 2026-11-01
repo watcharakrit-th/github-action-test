@@ -1,11 +1,13 @@
 # Single-node Kubernetes (k3s) in Docker, with Argo CD installed on startup and
 # the echo-api Application (../argocd/application.yaml) syncing k8s/ from GitHub.
 #
-#   cp .env.example .env    # credentials k3s uses to pull from the private registry
+#   cp .env.example .env    # Docker Hub credentials k3s uses to pull images
 #   docker compose up -d
 #   export KUBECONFIG=$PWD/kubeconfig.yaml
 #
-#   Argo CD UI: http://localhost:8080   echo-api: http://localhost:8081/echo/hello
+#   Argo CD UI: http://localhost:8080
+#   echo-api via nginx: http://localhost:8081/echo/hello
+#   public URL: kubectl -n echo-api logs deploy/cloudflared | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com'
 name: echo-api-lab
 
 services:
@@ -41,11 +43,11 @@ services:
     ports:
       - "127.0.0.1:6443:6443" # Kubernetes API
       - "127.0.0.1:8080:30080" # Argo CD UI (argocd-server NodePort)
-      - "127.0.0.1:8081:30081" # echo-api (k8s/service.yaml NodePort)
+      - "127.0.0.1:8081:30081" # nginx -> echo-api (k8s/nginx.yaml NodePort)
 
 configs:
-  # Rendered from .env. Lets k3s' containerd authenticate to the private registry,
-  # so the manifests in k8s/ need no imagePullSecrets.
+  # Rendered from .env. Lets k3s' containerd authenticate to the registry (needed for
+  # private images, and lifts Docker Hub's anonymous rate limit) without imagePullSecrets.
   registries:
     content: |
       configs:
